@@ -42,7 +42,7 @@ def desktop_entry_text() -> str:
 Type=Application
 Name=Claude Session Starter
 Comment=Manage daily Claude Pro session anchors
-Exec=python3 {starter.APP_DIR / 'app.py'}
+Exec={starter.APP_DIR / 'run-app.sh'}
 Icon={starter.APP_DIR / 'assets' / 'claude-session-starter.svg'}
 Terminal=false
 Categories=Utility;
@@ -82,6 +82,7 @@ def main() -> int:
         )
         (starter.APP_DIR / "starter.py").chmod(0o775)
         (starter.APP_DIR / "app.py").chmod(0o775)
+        (starter.APP_DIR / "run-app.sh").chmod(0o775)
 
         subprocess.run(["systemctl", "--user", "daemon-reload"], check=True)
         subprocess.run(

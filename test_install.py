@@ -16,7 +16,7 @@ class InstallTests(unittest.TestCase):
     def test_desktop_entry_launches_graphical_app(self):
         entry = install.desktop_entry_text()
         self.assertIn("Name=Claude Session Starter", entry)
-        self.assertIn("app.py", entry)
+        self.assertIn("run-app.sh", entry)
         self.assertIn("Terminal=false", entry)
         self.assertIn("claude-session-starter.svg", entry)
 

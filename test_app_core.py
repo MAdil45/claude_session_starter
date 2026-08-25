@@ -9,10 +9,26 @@ import unittest
 from unittest.mock import patch
 
 import app_core
+import app
 import starter
 
 
 class AppCoreTests(unittest.TestCase):
+    def test_ui_font_prefers_crisp_scalable_family(self):
+        self.assertEqual(
+            app.choose_ui_font(("gothic", "DejaVu Sans", "Lato"), "gothic"),
+            "Lato",
+        )
+
+    def test_ui_font_uses_default_when_no_preferred_family_exists(self):
+        self.assertEqual(app.choose_ui_font(("fixed",), "gothic"), "gothic")
+
+    def test_time_picker_accepts_only_two_digit_segments(self):
+        for value in ("", "0", "09", "23"):
+            self.assertTrue(app.TimePicker._valid_segment(value))
+        for value in ("123", "1.5", "noon"):
+            self.assertFalse(app.TimePicker._valid_segment(value))
+
     def test_next_slot_is_selected_today(self):
         state = app_core.schedule_state(
             "01:00",

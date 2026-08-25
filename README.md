@@ -13,6 +13,10 @@ Launch the app from this directory:
 ./run-app.sh
 ```
 
+The launcher uses Ubuntu's system Python/Tk so installed TrueType fonts are
+rendered with normal desktop anti-aliasing, including when a Conda environment
+is active in the shell.
+
 The application provides three views:
 
 - **Schedule:** choose the daily start time with a constrained 24-hour clock,

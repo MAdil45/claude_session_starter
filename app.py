@@ -1,9 +1,11 @@
-#!/usr/bin/env python3
+#!/usr/bin/python3
 """Linen Minimal desktop interface for Claude Session Starter."""
 
 from __future__ import annotations
 
 from datetime import datetime
+import os
+from pathlib import Path
 import subprocess
 import sys
 import threading
@@ -38,27 +40,33 @@ COLORS = {
     "selection_text": "#FFFFFF",
 }
 
-UI_FONT = "texgyreheros"
+UI_FONT = "DejaVu Sans"
+
+
+def choose_ui_font(families: tuple[str, ...], fallback: str) -> str:
+    """Return the best installed anti-aliased sans-serif family."""
+    available = {family.casefold(): family for family in families}
+    for preferred in (
+        "Inter",
+        "Lato",
+        "Ubuntu",
+        "Noto Sans",
+        "DejaVu Sans",
+        "Liberation Sans",
+    ):
+        if preferred.casefold() in available:
+            return available[preferred.casefold()]
+    return fallback
 
 
 def select_ui_font(root: tk.Misc) -> str:
     """Choose a scalable sans font that this Tk build can actually render."""
-    available = {family.casefold(): family for family in tkfont.families(root)}
-    for preferred in (
-        "Inter",
-        "Noto Sans",
-        "DejaVu Sans",
-        "Ubuntu",
-        "texgyreheros",
-        "latin modern sans",
-    ):
-        if preferred.casefold() in available:
-            return available[preferred.casefold()]
-    return tkfont.nametofont("TkDefaultFont", root=root).actual("family")
+    fallback = tkfont.nametofont("TkDefaultFont", root=root).actual("family")
+    return choose_ui_font(tkfont.families(root), fallback)
 
 
 class TimePicker(tk.Frame):
-    """Compact 24-hour clock control backed by a HH:MM StringVar."""
+    """Modern 24-hour time field backed by a HH:MM StringVar."""
 
     def __init__(
         self,
@@ -69,7 +77,7 @@ class TimePicker(tk.Frame):
         super().__init__(
             parent,
             bg="#FFFFFF",
-            highlightbackground="#D9D2C7",
+            highlightbackground=COLORS["border"],
             highlightcolor=COLORS["primary"],
             highlightthickness=1,
         )
@@ -81,51 +89,119 @@ class TimePicker(tk.Frame):
 
         clock = tk.Canvas(
             self,
-            width=22,
-            height=22,
+            width=28,
+            height=28,
             bg="#FFFFFF",
             highlightthickness=0,
         )
-        clock.create_oval(3, 3, 19, 19, outline=COLORS["muted"], width=2)
-        clock.create_line(11, 11, 11, 6, fill=COLORS["muted"], width=2)
-        clock.create_line(11, 11, 15, 13, fill=COLORS["muted"], width=2)
-        clock.pack(side="left", padx=(10, 6), pady=5)
-        self.hour_spin = self._selector(self.hour, range(24))
-        self.hour_spin.pack(side="left", pady=5)
+        clock.create_oval(1, 1, 27, 27, fill="#F1EEE8", outline="")
+        clock.create_oval(7, 7, 21, 21, outline=COLORS["primary"], width=1)
+        clock.create_line(14, 14, 14, 10, fill=COLORS["primary"], width=2)
+        clock.create_line(14, 14, 18, 16, fill=COLORS["primary"], width=2)
+        clock.pack(side="left", padx=(10, 9), pady=4)
+
+        self.hour_entry = self._segment(self.hour, 23)
         tk.Label(
             self,
             text=":",
             bg="#FFFFFF",
-            fg=COLORS["text"],
-            font=(UI_FONT, 11, "bold"),
-        ).pack(side="left", padx=3)
-        self.minute_spin = self._selector(self.minute, range(60))
-        self.minute_spin.pack(side="left", pady=5)
+            fg="#9A9185",
+            font=(UI_FONT, 13, "bold"),
+        ).pack(side="left", padx=7)
+        self.minute_entry = self._segment(self.minute, 59)
         tk.Label(
             self,
-            text="24-hour",
-            bg="#FFFFFF",
-            fg="#948B80",
-            font=(UI_FONT, 8),
-        ).pack(side="left", padx=(8, 10))
+            text="24H",
+            bg="#EDF1EB",
+            fg=COLORS["primary"],
+            font=(UI_FONT, 8, "bold"),
+            padx=7,
+            pady=4,
+        ).pack(side="left", padx=(11, 10))
 
         self.hour.trace_add("write", self._parts_changed)
         self.minute.trace_add("write", self._parts_changed)
         self.value.trace_add("write", self._value_changed)
         self._sync_from_value()
 
-    def _selector(self, variable: tk.StringVar, values: range) -> ttk.Combobox:
-        selector = ttk.Combobox(
+    def _segment(self, variable: tk.StringVar, maximum: int) -> tk.Entry:
+        shell = tk.Frame(
             self,
-            width=3,
+            width=48,
+            height=28,
+            bg="#F5F2EC",
+            highlightbackground="#E2DCD2",
+            highlightthickness=1,
+        )
+        shell.pack(side="left", pady=4)
+        shell.pack_propagate(False)
+        validate = (self.register(self._valid_segment), "%P")
+        entry = tk.Entry(
+            shell,
             textvariable=variable,
             justify="center",
-            values=[f"{value:02d}" for value in values],
-            state="readonly",
-            style="Linen.Time.TCombobox",
+            validate="key",
+            validatecommand=validate,
+            bg="#F5F2EC",
+            fg=COLORS["text"],
+            insertbackground=COLORS["primary"],
+            selectbackground="#DCE7D7",
+            selectforeground=COLORS["text"],
+            relief="flat",
+            borderwidth=0,
+            highlightthickness=0,
+            font=(UI_FONT, 11, "bold"),
         )
-        selector.bind("<<ComboboxSelected>>", self._parts_changed)
-        return selector
+        entry.pack(fill="both", expand=True, padx=5, pady=3)
+        entry.bind("<FocusIn>", lambda _event: self._focus_segment(shell, entry))
+        entry.bind(
+            "<FocusOut>",
+            lambda _event: self._finish_segment(shell, variable, maximum),
+        )
+        entry.bind("<Up>", lambda _event: self._adjust(variable, maximum, 1))
+        entry.bind("<Down>", lambda _event: self._adjust(variable, maximum, -1))
+        entry.bind("<Button-4>", lambda _event: self._adjust(variable, maximum, 1))
+        entry.bind("<Button-5>", lambda _event: self._adjust(variable, maximum, -1))
+        entry.bind(
+            "<MouseWheel>",
+            lambda event: self._adjust(variable, maximum, 1 if event.delta > 0 else -1),
+        )
+        return entry
+
+    @staticmethod
+    def _valid_segment(proposed: str) -> bool:
+        return proposed == "" or (proposed.isdigit() and len(proposed) <= 2)
+
+    def _focus_segment(self, shell: tk.Frame, entry: tk.Entry) -> None:
+        shell.configure(highlightbackground=COLORS["primary"])
+        entry.after_idle(entry.select_range, 0, "end")
+
+    def _finish_segment(
+        self,
+        shell: tk.Frame,
+        variable: tk.StringVar,
+        maximum: int,
+    ) -> None:
+        shell.configure(highlightbackground="#E2DCD2")
+        try:
+            value = min(int(variable.get()), maximum)
+        except ValueError:
+            self._sync_from_value()
+            return
+        variable.set(f"{value:02d}")
+
+    def _adjust(
+        self,
+        variable: tk.StringVar,
+        maximum: int,
+        amount: int,
+    ) -> str:
+        try:
+            current = int(variable.get())
+        except ValueError:
+            current = 0
+        variable.set(f"{(current + amount) % (maximum + 1):02d}")
+        return "break"
 
     def _sync_from_value(self) -> None:
         try:
@@ -230,23 +306,6 @@ class LinenApp(tk.Tk):
         )
         style.map(
             "Linen.TCombobox",
-            fieldbackground=[("readonly", "#FFFFFF")],
-            selectbackground=[("readonly", "#FFFFFF")],
-            selectforeground=[("readonly", COLORS["text"])],
-        )
-        style.configure(
-            "Linen.Time.TCombobox",
-            fieldbackground="#FFFFFF",
-            background="#EEE9E0",
-            foreground=COLORS["text"],
-            bordercolor="#D9D2C7",
-            lightcolor="#D9D2C7",
-            darkcolor="#D9D2C7",
-            arrowcolor=COLORS["muted"],
-            padding=4,
-        )
-        style.map(
-            "Linen.Time.TCombobox",
             fieldbackground=[("readonly", "#FFFFFF")],
             selectbackground=[("readonly", "#FFFFFF")],
             selectforeground=[("readonly", COLORS["text"])],
@@ -887,6 +946,12 @@ class LinenApp(tk.Tk):
 
 
 def main() -> int:
+    system_python = Path("/usr/bin/python3")
+    if system_python.exists() and Path(sys.executable).resolve() != system_python.resolve():
+        os.execv(
+            str(system_python),
+            [str(system_python), str(Path(__file__).resolve()), *sys.argv[1:]],
+        )
     app = LinenApp()
     app.mainloop()
     return 0
