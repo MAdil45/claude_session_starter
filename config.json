@@ -1,0 +1,7 @@
+{
+  "prompt": "Hi",
+  "model": "claude-haiku-4-5",
+  "effort": "low",
+  "timeout_seconds": 180,
+  "start_time": "01:00"
+}

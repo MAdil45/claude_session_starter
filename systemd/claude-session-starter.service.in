@@ -1,0 +1,14 @@
+[Unit]
+Description=Start a Claude Pro five-hour session with a minimal greeting
+Documentation=https://support.claude.com/en/articles/8325606-what-is-the-pro-plan
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/env python3 __STARTER_PATH__
+
+# Prevent credentials accidentally injected into the user manager from taking
+# precedence over the stored Claude.ai OAuth login.
+UnsetEnvironment=ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN CLAUDE_CODE_USE_BEDROCK CLAUDE_CODE_USE_VERTEX CLAUDE_CODE_USE_FOUNDRY
+
+[Install]
+WantedBy=default.target
